@@ -1,0 +1,9 @@
+# created by virtualenv automatically
+
+.idea/
+include/
+lib/
+Scripts/
+Doc/
+
+pyvenv.cfg
