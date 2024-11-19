@@ -70,6 +70,7 @@ class Fruit:
         self.game = game
         self.snake = snake  # 這裡接收並儲存snake物件
         self.size = size  # 水果的大小
+        self.score = 0  # 初始化分數屬性
         self.pos = []
         self.spawn()
 
@@ -83,18 +84,21 @@ class Fruit:
             # 根據水果大小來確保位置不會超過邊界
             if self.size == 1:
                 self.pos = [[base_x, base_y]]  # 預設水果為一個unit
+                self.score = 15  # size 1 的水果得 15 分
             elif self.size == 2:
                 # 水平或垂直的兩個unit
                 if random.choice([True, False]):  # 隨機決定是水平方向還是垂直方向
                     # 確保水平水果不會超過邊界
                     if base_x + self.game.unit < self.game.canvas_x:
                         self.pos = [[base_x, base_y], [base_x + self.game.unit, base_y]]
+                        self.score = 10  # size 2 的水果得 10 分
                     else:
                         continue  # 超過邊界就重新生成
                 else:
                     # 確保垂直水果不會超過邊界
                     if base_y + self.game.unit < self.game.canvas_y:
                         self.pos = [[base_x, base_y], [base_x, base_y + self.game.unit]]
+                        self.score = 10  # size 2 的水果得 10 分
                     else:
                         continue  # 超過邊界就重新生成
             elif self.size == 4:
@@ -107,6 +111,7 @@ class Fruit:
                         [base_x, base_y + self.game.unit],
                         [base_x + self.game.unit, base_y + self.game.unit],
                     ]
+                    self.score = 5  # size 4 的水果得 5 分
                 else:
                     continue  # 超過邊界就重新生成
 
@@ -181,7 +186,7 @@ def main():
             for fruit in fruits:
                 if snake.head in fruit.pos:  # 如果蛇的頭部位置碰到水果的任何位置
                     fruit.spawn()  # 生成新的水果
-                    score += 1  # 分數加1
+                    score += fruit.score  # 增加對應的分數
         else:
             snake.body.pop()
 
