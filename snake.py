@@ -9,7 +9,6 @@ class Game:
         self.canvas_x = 720
         self.canvas_y = 630
         self.unit = 30
-        self.game_speed = 10
         # 初始化 Pygame
         pygame.init()
         self.window = pygame.display.set_mode((780, 780))
@@ -125,26 +124,28 @@ class Fruit:
 
 
 
-def main():
-    game = Game()  # 創建遊戲對象
-    color = Color()  # 創建顏色對象
-    score = 0  # 初始化分數
-    snake = Snake(game, color)  # 創建蛇對象
+def play_game(game, color):
+    score = 0
+    base_speed = 10  # 初始速度
+    max_speed = 30   # 最大速度限制
+    speed_increment = 2  # 每次提升速度的增量
+    points_per_speed_increase = 100  # 每 10 分提升一次速度
+
+    game_speed = base_speed
+    snake = Snake(game, color)
     fruits = [
-        Fruit(game, snake, size=1),  # 一個unit的水果
-        Fruit(game, snake, size=1),  
-        Fruit(game, snake, size=1),  
-        Fruit(game, snake, size=2),  # 兩個水平或垂直unit的水果
-        Fruit(game, snake, size=2),  
-        Fruit(game, snake, size=4),  # 四個unit的正方形水果
+        Fruit(game, snake, size=1),
+        Fruit(game, snake, size=2),
+        Fruit(game, snake, size=4),
     ]
 
+    # 遊戲邏輯循環
     while True:
-        start_time = pygame.time.get_ticks()  # 記錄時間，用於控制遊戲速度
-        while pygame.time.get_ticks() - start_time < 1000 // game.game_speed:
+        start_time = pygame.time.get_ticks()
+        while pygame.time.get_ticks() - start_time < 1000 // game_speed:
             pygame.event.pump()
 
-        # 偵測鍵盤事件
+        # 處理事件
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -158,8 +159,8 @@ def main():
                     snake.new_direction = "DOWN"
                 elif event.key in [pygame.K_w, pygame.K_UP]:
                     snake.new_direction = "UP"
-                        
-        # 判斷轉彎方向是否合理
+
+        # 更新蛇的方向
         if snake.new_direction == "RIGHT" and snake.direction != "LEFT":
             snake.direction = "RIGHT"
         elif snake.new_direction == "LEFT" and snake.direction != "RIGHT":
@@ -169,6 +170,7 @@ def main():
         elif snake.new_direction == "UP" and snake.direction != "DOWN":
             snake.direction = "UP"
 
+        # 移動蛇
         if snake.direction == "RIGHT":
             snake.head[0] += game.unit
         elif snake.direction == "LEFT":
@@ -184,20 +186,21 @@ def main():
         if any(snake.head == pos for fruit in fruits for pos in fruit.pos):
             game.fruit_sfx.play()
             for fruit in fruits:
-                if snake.head in fruit.pos:  # 如果蛇的頭部位置碰到水果的任何位置
-                    fruit.spawn()  # 生成新的水果
-                    score += fruit.score  # 增加對應的分數
+                if snake.head in fruit.pos:
+                    fruit.spawn()
+                    score += fruit.score
+
+            # 提高速度
+            if score % points_per_speed_increase == 0:  # 每累積特定分數
+                game_speed = min(max_speed, base_speed + (score // points_per_speed_increase) * speed_increment)
         else:
             snake.body.pop()
 
         # 判斷是否碰撞牆壁或自己
-        if not (0 <= snake.head[0] < game.canvas_x):
-            break
-        if not (0 <= snake.head[1] < game.canvas_y):
-            break
-        if snake.head in snake.body[1:]:
+        if not (0 <= snake.head[0] < game.canvas_x) or not (0 <= snake.head[1] < game.canvas_y) or snake.head in snake.body[1:]:
             break
 
+        # 繪製遊戲畫面
         game.canvas.blit(game.background, (0, 0))
 
         # 畫蛇
@@ -217,33 +220,58 @@ def main():
         # 畫水果
         for fruit in fruits:
             for pos in fruit.pos:
-                if fruit.size == 1:
-                    temp_color = color.red  # 紅色
-                elif fruit.size == 2:
-                    temp_color = color.blue  # 藍色
-                elif fruit.size == 4:
-                    temp_color = color.grey  # 灰色
+                temp_color = color.red if fruit.size == 1 else color.blue if fruit.size == 2 else color.grey
                 pygame.draw.rect(game.canvas, temp_color, (pos[0], pos[1], game.unit - 4, game.unit - 4), 0, 3)
 
         game.window.blit(game.border, (0, 0))
         game.window.blit(game.canvas, (30, 120))
-        Text(game, str(score), 45, color.white, "impact").midleft(90, 45)
+        Text(game, f"Score: {score}", 45, color.white, "impact").midleft(90, 45)
 
         pygame.display.update()
 
-    game.game_over_sfx.play()
-    game.window.blit(game.game_over, (0, 0))
-    pygame.display.update()
 
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
-                    running = False
+def main():
+    pygame.init()  # 只初始化一次
+    game = Game()
+    color = Color()
+
+    while True:  # 外層循環，控制多輪遊戲
+        # 顯示開始畫面
+        game.window.fill((0, 0, 0))  # 使用黑色背景清屏
+        start_text = Text(game, "Press ENTER to start", 40, color.white, "impact")
+        text_width = start_text.rect.width
+        start_text.midleft(game.canvas_x // 2 - text_width // 2, game.canvas_y // 2)
+        pygame.display.update()
+
+        waiting_for_start = True
+        while waiting_for_start:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        waiting_for_start = False
+
+        # 開始遊戲
+        play_game(game, color)
+
+        # 顯示遊戲結束畫面
+        game.game_over_sfx.play()
+        game.window.fill((0, 0, 0))  # 使用黑色背景代替關閉視窗
+        game.window.blit(game.game_over, (0, 0))
+        pygame.display.update()
+
+        # 等待按下 Enter 鍵重新開始
+        waiting_for_restart = True
+        while waiting_for_restart:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        waiting_for_restart = False
 
 
 if __name__ == "__main__":
