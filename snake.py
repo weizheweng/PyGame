@@ -2,6 +2,32 @@ import pygame
 import random
 from sys import exit
 
+class RPS:
+    def __init__(self, game, snake, fruits):
+        self.game = game
+        self.snake = snake
+        self.fruits = fruits  # 接收多個水果的列表
+        self.pos = []
+        self.spawn()
+
+    def spawn(self):
+        # 確保 RPS 點不與蛇的身體和所有水果的位置重疊
+        valid_position = False
+        while not valid_position:
+            x = random.randrange(0, self.game.canvas_x, self.game.unit)
+            y = random.randrange(0, self.game.canvas_y, self.game.unit)
+            self.pos = [x, y]
+
+            # 檢查位置是否與蛇身體重疊
+            is_not_on_snake = all(self.pos != body for body in self.snake.body)
+
+            # 檢查位置是否與任何水果的點重疊
+            is_not_on_fruit = all(
+                self.pos != fruit_pos for fruit in self.fruits for fruit_pos in fruit.pos
+            )
+
+            # 只有當兩者都有效時，才接受這個位置
+            valid_position = is_not_on_snake and is_not_on_fruit
 
 class Game:
     def __init__(self):
@@ -19,6 +45,7 @@ class Game:
         self.border = pygame.image.load("resources/border.png").convert()
         self.face = pygame.image.load("resources/face.png").convert_alpha()
         self.game_over = pygame.image.load("resources/game_over.png").convert_alpha()
+        self.mini_game = pygame.image.load("resources/mini_game.png").convert_alpha()
         # 音效
         pygame.mixer.init()
         self.bgm = pygame.mixer.Sound("resources/bgm.wav")
@@ -138,6 +165,8 @@ def play_game(game, color):
         Fruit(game, snake, size=2),
         Fruit(game, snake, size=4),
     ]
+    
+    rps = RPS(game, snake, fruits)  # 新增 RPS 點
 
     # 遊戲邏輯循環
     while True:
@@ -193,6 +222,10 @@ def play_game(game, color):
             # 提高速度
             if score % points_per_speed_increase == 0:  # 每累積特定分數
                 game_speed = min(max_speed, base_speed + (score // points_per_speed_increase) * speed_increment)
+        elif snake.head == rps.pos:
+            score_change = rps_game(game, color)
+            score += score_change
+            rps.spawn()  # 重新生成 RPS 點
         else:
             snake.body.pop()
 
@@ -222,6 +255,10 @@ def play_game(game, color):
             for pos in fruit.pos:
                 temp_color = color.red if fruit.size == 1 else color.blue if fruit.size == 2 else color.grey
                 pygame.draw.rect(game.canvas, temp_color, (pos[0], pos[1], game.unit - 4, game.unit - 4), 0, 3)
+                
+        # 畫 RPS 點
+        icon = pygame.transform.scale(game.mini_game, (game.unit, game.unit))
+        game.canvas.blit(icon, (rps.pos[0], rps.pos[1]))
 
         game.window.blit(game.border, (0, 0))
         game.window.blit(game.canvas, (30, 120))
@@ -272,6 +309,63 @@ def main():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
                         waiting_for_restart = False
+
+def rps_game(game, color):
+    choices = ["Rock", "Paper", "Scissors"]
+    player_choice = None
+    com_choice = random.choice(choices)
+
+    # 繪製 RPS 選擇界面
+    while player_choice is None:
+        game.window.fill(color.black)
+        Text(game, "Choose: [R] ock, [P] aper, [S] cissors", 40, color.white, "impact").midleft(100, 300)
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    player_choice = "Rock"
+                elif event.key == pygame.K_p:
+                    player_choice = "Paper"
+                elif event.key == pygame.K_s:
+                    player_choice = "Scissors"
+
+    # 判斷結果
+    if player_choice == com_choice:
+        result = "Draw"
+        score_change = 0
+    elif (player_choice == "Rock" and com_choice == "Scissors") or \
+         (player_choice == "Paper" and com_choice == "Rock") or \
+         (player_choice == "Scissors" and com_choice == "Paper"):
+        result = "You Win! (+10)"
+        score_change = 10
+    else:
+        result = "You Lose! (-2)"
+        score_change = -2
+
+    # 倒數計時顯示
+    countdown_time = 5  # 倒數 2 秒
+    start_time = pygame.time.get_ticks()  # 紀錄開始時間
+
+    while True:
+        elapsed_time = (pygame.time.get_ticks() - start_time) / 1000  # 計算經過的時間
+        remaining_time = max(0, countdown_time - elapsed_time)  # 計算剩餘時間
+
+        # 更新畫面
+        game.window.fill((0, 0, 0))
+        Text(game, f"You chose {player_choice}, AI chose {com_choice}.", 40, color.white, "impact").midleft(100, 300)
+        Text(game, result, 50, color.red if score_change < 0 else color.green, "impact").midleft(100, 400)
+        Text(game, f"Returning in {int(remaining_time)} seconds...", 30, color.white, "impact").midleft(100, 500)
+        pygame.display.update()
+
+        # 倒數結束後退出
+        if remaining_time <= 0:
+            break
+
+    return score_change
 
 
 if __name__ == "__main__":
