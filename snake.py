@@ -75,7 +75,6 @@ class Text:
         self.rect.midleft = (x, y)
         self.game.window.blit(self.surface, self.rect)
 
-
 class Snake:
     def __init__(self, game, color):
         self.game = game
@@ -89,7 +88,6 @@ class Snake:
         for i in range(length - 1):
             self.head[0] += game.unit
             self.body.insert(0, list(self.head))
-
 
 class Fruit:
     def __init__(self, game, snake, size=1):
@@ -148,20 +146,20 @@ class Fruit:
                     valid_position = False  # 如果水果與蛇身體重疊，標記為無效位置，並重新生成
                     break
 
-
-
-
 def play_game(game, color):
     score = 0
     base_speed = 10  # 初始速度
     max_speed = 30   # 最大速度限制
-    speed_increment = 2  # 每次提升速度的增量
-    points_per_speed_increase = 100  # 每 10 分提升一次速度
+    speed_increment = 5  # 每次提升速度的增量
+    points_per_speed_increase = 20  # 每 100 分提升一次速度
 
     game_speed = base_speed
-    snake = Snake(game, color)
-    fruits = [
+    snake = Snake(game, color)  # 新增 Snake 點
+    fruits = [  # 新增 Fruit 點
         Fruit(game, snake, size=1),
+        Fruit(game, snake, size=1),  
+        Fruit(game, snake, size=1),  
+        Fruit(game, snake, size=2),  
         Fruit(game, snake, size=2),
         Fruit(game, snake, size=4),
     ]
@@ -174,12 +172,12 @@ def play_game(game, color):
         while pygame.time.get_ticks() - start_time < 1000 // game_speed:
             pygame.event.pump()
 
-        # 處理事件
+        # 處理事件，方向鍵可以自由改變
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
-            if event.type == pygame.KEYDOWN:
+            if event.type == pygame.KEYDOWN:  # 鍵盤按鍵偵測
                 if event.key in [pygame.K_d, pygame.K_RIGHT]:
                     snake.new_direction = "RIGHT"
                 elif event.key in [pygame.K_a, pygame.K_LEFT]:
@@ -213,21 +211,22 @@ def play_game(game, color):
 
         # 判斷蛇是否吃到水果
         if any(snake.head == pos for fruit in fruits for pos in fruit.pos):
-            game.fruit_sfx.play()
+            game.fruit_sfx.play()  # 播放水果音效
             for fruit in fruits:
                 if snake.head in fruit.pos:
                     fruit.spawn()
                     score += fruit.score
-
-            # 提高速度
-            if score % points_per_speed_increase == 0:  # 每累積特定分數
-                game_speed = min(max_speed, base_speed + (score // points_per_speed_increase) * speed_increment)
+        # 判斷蛇是否吃到 RPS 點
         elif snake.head == rps.pos:
             score_change = rps_game(game, color)
             score += score_change
             rps.spawn()  # 重新生成 RPS 點
         else:
             snake.body.pop()
+        
+        # 提高速度
+        if score % points_per_speed_increase == 0:  # 每累積特定分數
+            game_speed = min(max_speed, base_speed + (score // points_per_speed_increase) * speed_increment)
 
         # 判斷是否碰撞牆壁或自己
         if not (0 <= snake.head[0] < game.canvas_x) or not (0 <= snake.head[1] < game.canvas_y) or snake.head in snake.body[1:]:
@@ -266,7 +265,6 @@ def play_game(game, color):
 
         pygame.display.update()
 
-
 def main():
     pygame.init()  # 只初始化一次
     game = Game()
@@ -296,7 +294,7 @@ def main():
         # 顯示遊戲結束畫面
         game.game_over_sfx.play()
         game.window.fill((0, 0, 0))  # 使用黑色背景代替關閉視窗
-        game.window.blit(game.game_over, (0, 0))
+        game.window.blit(game.game_over, (0, 0))  # 顯示遊戲結束畫面
         pygame.display.update()
 
         # 等待按下 Enter 鍵重新開始
@@ -366,7 +364,6 @@ def rps_game(game, color):
             break
 
     return score_change
-
 
 if __name__ == "__main__":
     main()
