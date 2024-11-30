@@ -1,5 +1,6 @@
 import pygame
 import random
+import json
 from sys import exit
 
 class RPS:
@@ -29,6 +30,17 @@ class RPS:
             # 只有當兩者都有效時，才接受這個位置
             valid_position = is_not_on_snake and is_not_on_fruit
 
+class Text:
+    def __init__(self, game, txt, size, color, font):
+        self.game = game
+        font = pygame.font.SysFont(font, size)
+        self.surface = font.render(txt, True, color)
+        self.rect = self.surface.get_rect()
+
+    def midleft(self, x, y):
+        self.rect.midleft = (x, y)
+        self.game.window.blit(self.surface, self.rect)
+        
 class Game:
     def __init__(self):
         # 遊戲設定
@@ -52,6 +64,24 @@ class Game:
         self.fruit_sfx = pygame.mixer.Sound("resources/fruit.wav")
         self.game_over_sfx = pygame.mixer.Sound("resources/game_over.wav")
         self.bgm.play(-1)
+        # 暫停
+        self.paused = False
+        # 重新開始
+        self.restart = False
+        # 關閉
+        self.quit = False
+        
+    def toggle_pause(self):
+        """切換暫停狀態"""
+        self.paused = not self.paused
+        
+    def toggle_restart(self):
+        """切換重新開始狀態"""
+        self.restart = not self.restart
+        
+    def toggle_quit(self):
+        """切換關閉狀態"""
+        self.quit = not self.quit
 
 class Color:
     def __init__(self):
@@ -63,17 +93,6 @@ class Color:
         self.blue = (0, 0, 255)
         self.green = (64, 201, 73)
         self.darkGreen = (36, 127, 42)
-
-class Text:
-    def __init__(self, game, txt, size, color, font):
-        self.game = game
-        font = pygame.font.SysFont(font, size)
-        self.surface = font.render(txt, True, color)
-        self.rect = self.surface.get_rect()
-
-    def midleft(self, x, y):
-        self.rect.midleft = (x, y)
-        self.game.window.blit(self.surface, self.rect)
 
 class Snake:
     def __init__(self, game, color):
@@ -146,12 +165,186 @@ class Fruit:
                     valid_position = False  # 如果水果與蛇身體重疊，標記為無效位置，並重新生成
                     break
 
+def rps_game(game, color):
+    choices = ["Rock", "Paper", "Scissors"]
+    player_choice = None
+    com_choice = random.choice(choices)
+
+    # 繪製 RPS 選擇界面
+    while player_choice is None:
+        game.window.fill(color.black)
+        Text(game, "Choose: [R] ock, [P] aper, [S] cissors", 40, color.white, "impact").midleft(100, 300)
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    player_choice = "Rock"
+                elif event.key == pygame.K_p:
+                    player_choice = "Paper"
+                elif event.key == pygame.K_s:
+                    player_choice = "Scissors"
+
+    # 判斷結果
+    if player_choice == com_choice:
+        result = "Draw"
+        score_change = 0
+    elif (player_choice == "Rock" and com_choice == "Scissors") or \
+         (player_choice == "Paper" and com_choice == "Rock") or \
+         (player_choice == "Scissors" and com_choice == "Paper"):
+        result = "You Win! (+10)"
+        score_change = 10
+    else:
+        result = "You Lose! (-2)"
+        score_change = -2
+
+    # 倒數計時顯示
+    countdown_time = 5  # 倒數 5 秒
+    start_time = pygame.time.get_ticks()  # 紀錄開始時間
+
+    while True:
+        elapsed_time = (pygame.time.get_ticks() - start_time) / 1000  # 計算經過的時間
+        remaining_time = max(0, countdown_time - elapsed_time)  # 計算剩餘時間
+
+        # 更新畫面
+        game.window.fill((0, 0, 0))
+        Text(game, f"You chose {player_choice}, AI chose {com_choice}.", 40, color.white, "impact").midleft(100, 300)
+        Text(game, result, 50, color.red if score_change < 0 else color.green, "impact").midleft(100, 400)
+        Text(game, f"Returning in {int(remaining_time)} seconds...", 30, color.white, "impact").midleft(100, 500)
+        pygame.display.update()
+
+        # 倒數結束後退出
+        if remaining_time <= 0:
+            break
+
+    return score_change
+
+def handle_key_events(game, snake, score):
+    """處理方向按鍵事件"""
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            exit()
+        if event.type == pygame.KEYDOWN:
+            if event.key in [pygame.K_d, pygame.K_RIGHT]:
+                snake.new_direction = "RIGHT"
+            elif event.key in [pygame.K_a, pygame.K_LEFT]:
+                snake.new_direction = "LEFT"
+            elif event.key in [pygame.K_s, pygame.K_DOWN]:
+                snake.new_direction = "DOWN"
+            elif event.key in [pygame.K_w, pygame.K_UP]:
+                snake.new_direction = "UP"
+                
+            # 暫停/繼續遊戲
+            elif event.key == pygame.K_k:
+                game.toggle_pause()
+            
+            # 離開遊戲並儲存狀態
+            elif event.key == pygame.K_f:
+               game.toggle_quit()
+
+            # 重新開始遊戲
+            elif event.key == pygame.K_r:
+                game.toggle_restart()
+
+def update_snake_direction(snake):
+    """更新蛇的移動方向，避免掉頭"""
+    if snake.new_direction == "RIGHT" and snake.direction != "LEFT":
+        snake.direction = "RIGHT"
+    elif snake.new_direction == "LEFT" and snake.direction != "RIGHT":
+        snake.direction = "LEFT"
+    elif snake.new_direction == "DOWN" and snake.direction != "UP":
+        snake.direction = "DOWN"
+    elif snake.new_direction == "UP" and snake.direction != "DOWN":
+        snake.direction = "UP"
+
+def move_snake(snake, unit):
+    """依據方向移動蛇"""
+    if snake.direction == "RIGHT":
+        snake.head[0] += unit
+    elif snake.direction == "LEFT":
+        snake.head[0] -= unit
+    elif snake.direction == "DOWN":
+        snake.head[1] += unit
+    elif snake.direction == "UP":
+        snake.head[1] -= unit
+
+def save_score_to_json(score, file_path="game_state.json"):
+    data = {"score": score}
+    with open(file_path, "w") as file:
+        json.dump(data, file)
+
+def load_score_from_json(file_path="game_state.json"):
+    try:
+        with open(file_path, "r") as file:
+            data = json.load(file)
+            return data.get("score", 0)  # 如果沒有找到分數，預設為 0
+    except FileNotFoundError:
+        return 0
+
+def display_pause_message(game, color):
+    # 創建暫停與繼續文字
+    pause_text = Text(game, "Paused", 48, color=color.white, font="impact")
+    continue_text = Text(game, "Press 'K' to continue", 32, color=color.white, font="impact")
+
+    # 計算文字的顯示位置，讓它們在畫面中央
+    pause_text.midleft(game.canvas_x // 2 - pause_text.rect.width // 2, game.canvas_y // 2 - 40)
+    continue_text.midleft(game.canvas_x // 2 - continue_text.rect.width // 2, game.canvas_y // 2 + 10)
+
+    # 更新畫面
+    pygame.display.flip()
+    
+def display_restart_message(game, color):
+    # 創建暫停與繼續文字
+    pause_text = Text(game, "Restarting...", 48, color=color.white, font="impact")
+    continue_text = Text(game, "Press 'R' to restart", 32, color=color.white, font="impact")
+
+    # 計算文字的顯示位置，讓它們在畫面中央
+    pause_text.midleft(game.canvas_x // 2 - pause_text.rect.width // 2, game.canvas_y // 2 - 40)
+    continue_text.midleft(game.canvas_x // 2 - continue_text.rect.width // 2, game.canvas_y // 2 + 10)
+
+    # 更新畫面
+    pygame.display.flip()
+    
+    # 等待玩家按下 'R' 鍵來重新開始
+    waiting_for_restart = True
+    while waiting_for_restart:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:  # 按下 'R' 鍵重新開始
+                    waiting_for_restart = False
+                    break  
+
+def display_quit_message(game, color):
+    # 創建暫停與繼續文字
+    pause_text = Text(game, "Quitting...", 48, color=color.white, font="impact")
+    continue_text = Text(game, "Press 'F' to quit", 32, color=color.white, font="impact")
+
+    # 計算文字的顯示位置，讓它們在畫面中央
+    pause_text.midleft(game.canvas_x // 2 - pause_text.rect.width // 2, game.canvas_y // 2 - 40)
+    continue_text.midleft(game.canvas_x // 2 - continue_text.rect.width // 2, game.canvas_y // 2 + 10)
+
+    # 更新畫面
+    pygame.display.flip()
+    
+    # 等待玩家按下 'F' 鍵來關閉
+    waiting_for_quit = True
+    while waiting_for_quit:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_f:
+                    waiting_for_quit = False
+                    break  
+
 def play_game(game, color):
-    score = 0
+    score = load_score_from_json()
     base_speed = 10  # 初始速度
     max_speed = 30   # 最大速度限制
-    speed_increment = 5  # 每次提升速度的增量
-    points_per_speed_increase = 20  # 每 100 分提升一次速度
+    speed_increment = 2  # 每次提升速度的增量
+    points_per_speed_increase = 100  # 每 100 分提升一次速度
 
     game_speed = base_speed
     snake = Snake(game, color)  # 新增 Snake 點
@@ -172,40 +365,28 @@ def play_game(game, color):
         while pygame.time.get_ticks() - start_time < 1000 // game_speed:
             pygame.event.pump()
 
-        # 處理事件，方向鍵可以自由改變
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
-            if event.type == pygame.KEYDOWN:  # 鍵盤按鍵偵測
-                if event.key in [pygame.K_d, pygame.K_RIGHT]:
-                    snake.new_direction = "RIGHT"
-                elif event.key in [pygame.K_a, pygame.K_LEFT]:
-                    snake.new_direction = "LEFT"
-                elif event.key in [pygame.K_s, pygame.K_DOWN]:
-                    snake.new_direction = "DOWN"
-                elif event.key in [pygame.K_w, pygame.K_UP]:
-                    snake.new_direction = "UP"
-
+        # 處理事件
+        handle_key_events(game, snake, score)
+        
+        if game.paused:
+            display_pause_message(game, color)
+            continue  # 跳過當前循環，保持暫停狀態
+        
+        if game.restart:
+            display_restart_message(game, color)
+            break  # 終止遊戲
+        
+        if game.quit:
+            display_quit_message(game, color)
+            save_score_to_json(score)
+            pygame.quit()
+            exit()
+        
         # 更新蛇的方向
-        if snake.new_direction == "RIGHT" and snake.direction != "LEFT":
-            snake.direction = "RIGHT"
-        elif snake.new_direction == "LEFT" and snake.direction != "RIGHT":
-            snake.direction = "LEFT"
-        elif snake.new_direction == "DOWN" and snake.direction != "UP":
-            snake.direction = "DOWN"
-        elif snake.new_direction == "UP" and snake.direction != "DOWN":
-            snake.direction = "UP"
+        update_snake_direction(snake)
 
         # 移動蛇
-        if snake.direction == "RIGHT":
-            snake.head[0] += game.unit
-        elif snake.direction == "LEFT":
-            snake.head[0] -= game.unit
-        elif snake.direction == "DOWN":
-            snake.head[1] += game.unit
-        elif snake.direction == "UP":
-            snake.head[1] -= game.unit
+        move_snake(snake, game.unit)
 
         snake.body.insert(0, list(snake.head))
 
@@ -272,7 +453,8 @@ def main():
 
     while True:  # 外層循環，控制多輪遊戲
         # 顯示開始畫面
-        game.window.fill((0, 0, 0))  # 使用黑色背景清屏
+        game.restart = False
+        game.window.fill(color.black)  # 使用黑色背景清屏
         start_text = Text(game, "Press ENTER to start", 40, color.white, "impact")
         text_width = start_text.rect.width
         start_text.midleft(game.canvas_x // 2 - text_width // 2, game.canvas_y // 2)
@@ -291,6 +473,9 @@ def main():
         # 開始遊戲
         play_game(game, color)
 
+        if game.restart:
+            continue
+            
         # 顯示遊戲結束畫面
         game.game_over_sfx.play()
         game.window.fill((0, 0, 0))  # 使用黑色背景代替關閉視窗
@@ -307,63 +492,6 @@ def main():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
                         waiting_for_restart = False
-
-def rps_game(game, color):
-    choices = ["Rock", "Paper", "Scissors"]
-    player_choice = None
-    com_choice = random.choice(choices)
-
-    # 繪製 RPS 選擇界面
-    while player_choice is None:
-        game.window.fill(color.black)
-        Text(game, "Choose: [R] ock, [P] aper, [S] cissors", 40, color.white, "impact").midleft(100, 300)
-        pygame.display.update()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:
-                    player_choice = "Rock"
-                elif event.key == pygame.K_p:
-                    player_choice = "Paper"
-                elif event.key == pygame.K_s:
-                    player_choice = "Scissors"
-
-    # 判斷結果
-    if player_choice == com_choice:
-        result = "Draw"
-        score_change = 0
-    elif (player_choice == "Rock" and com_choice == "Scissors") or \
-         (player_choice == "Paper" and com_choice == "Rock") or \
-         (player_choice == "Scissors" and com_choice == "Paper"):
-        result = "You Win! (+10)"
-        score_change = 10
-    else:
-        result = "You Lose! (-2)"
-        score_change = -2
-
-    # 倒數計時顯示
-    countdown_time = 5  # 倒數 2 秒
-    start_time = pygame.time.get_ticks()  # 紀錄開始時間
-
-    while True:
-        elapsed_time = (pygame.time.get_ticks() - start_time) / 1000  # 計算經過的時間
-        remaining_time = max(0, countdown_time - elapsed_time)  # 計算剩餘時間
-
-        # 更新畫面
-        game.window.fill((0, 0, 0))
-        Text(game, f"You chose {player_choice}, AI chose {com_choice}.", 40, color.white, "impact").midleft(100, 300)
-        Text(game, result, 50, color.red if score_change < 0 else color.green, "impact").midleft(100, 400)
-        Text(game, f"Returning in {int(remaining_time)} seconds...", 30, color.white, "impact").midleft(100, 500)
-        pygame.display.update()
-
-        # 倒數結束後退出
-        if remaining_time <= 0:
-            break
-
-    return score_change
 
 if __name__ == "__main__":
     main()
